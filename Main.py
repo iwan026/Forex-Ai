@@ -69,6 +69,11 @@ class ForexPredictor:
         self.mt5_initialized = False
         self.models = {}
         self.scalers = {}
+        self.fe = ForexFeatureEngineering(
+            denoising=True,
+            use_talib=True,
+            use_pca=False
+        )
         self.initialize_mt5()
 
     def initialize_mt5(self):
@@ -112,65 +117,7 @@ class ForexPredictor:
     def prepare_data(self, df, window_size=60, predict_size=1):
         """Siapkan data untuk input model"""
         # Tambahkan indikator
-        df = self.add_indicators(df)
-
-        # Deteksi support resistance dan level psikologis
-        support_resistance = self.detect_support_resistance(df)
-        psych_levels = self.detect_psychological_levels(df)
-
-        # Tambahkan fitur jarak dari support/resistance dan level psikologis
-        current_price = df["close"].iloc[-1]
-
-        # Tambahkan fitur S/R terdekat
-        if support_resistance:
-            sr_prices = list(support_resistance.keys())
-            nearest_sr = min(sr_prices, key=lambda x: abs(x - current_price))
-            df["dist_to_nearest_sr"] = abs(df["close"] - nearest_sr) / df["close"]
-            df["is_above_nearest_sr"] = (df["close"] > nearest_sr).astype(int)
-        else:
-            df["dist_to_nearest_sr"] = 0
-            df["is_above_nearest_sr"] = 0
-
-        # Tambahkan fitur level psikologis terdekat
-        if psych_levels:
-            psych_prices = [level for level, _ in psych_levels]
-            nearest_psych = min(psych_prices, key=lambda x: abs(x - current_price))
-            df["dist_to_nearest_psych"] = abs(df["close"] - nearest_psych) / df["close"]
-            df["is_above_nearest_psych"] = (df["close"] > nearest_psych).astype(int)
-        else:
-            df["dist_to_nearest_psych"] = 0
-            df["is_above_nearest_psych"] = 0
-
-        # Pilih fitur untuk model
-        features = [
-            "open",
-            "high",
-            "low",
-            "close",
-            "tick_volume",
-            "rsi",
-            "MACDh_12_26_9",
-            "BBL_5_2.0",
-            "BBM_5_2.0",
-            "BBU_5_2.0",
-            "ema_9",
-            "ema_21",
-            "ema_50",
-            "atr",
-            "STOCHk_14_3_3",
-            "STOCHd_14_3_3",
-            "vol_roc",
-            "mom",
-            "price_change",
-            "price_change_pct",
-            "body_size",
-            "upper_shadow",
-            "lower_shadow",
-            "dist_to_nearest_sr",
-            "is_above_nearest_sr",
-            "dist_to_nearest_psych",
-            "is_above_nearest_psych",
-        ]
+        processed_df, features = self.fe.process(df)
 
         # Buat target: arah pergerakan (naik/turun)
         df["target"] = (df["close"].shift(-predict_size) > df["close"]).astype(int)
